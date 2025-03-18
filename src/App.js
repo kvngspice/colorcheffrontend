@@ -29,7 +29,7 @@ const App = () => {
   const imageRef = useRef(null);
   const videoRef = useRef(null);
 
-  const apiUrl = process.env.REACT_APP_API_URL || 'https://colorchef.onrender.com';
+  const apiUrl = (process.env.REACT_APP_API_URL || 'https://colorchef.onrender.com').replace(/\/$/, '');
 
   const handleImageClick = (e) => {
     if (!imageRef.current) return;
@@ -106,7 +106,7 @@ const App = () => {
     formData.append("numColors", count);
 
     try {
-      const response = await axios.post(`${apiUrl}/api/upload/`, formData);
+      const response = await axios.post(`${apiUrl}/api/upload`, formData);
       setColors(response.data.colors);
       if (!response.data.isVideo) {
         setColorRegions(response.data.regions);
@@ -145,7 +145,7 @@ const App = () => {
     }
 
     try {
-      const response = await axios.post(`${apiUrl}/api/upload/`, formData);
+      const response = await axios.post(`${apiUrl}/api/upload`, formData);
       setColors(response.data.colors);
       if (!response.data.isVideo) {
         setColorRegions(response.data.regions);
