@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import axios from "axios";
 import { useDropzone } from "react-dropzone";
-import { debounce } from 'lodash';
 import logo from './assets/logo.svg';
 
 const shuffleArray = (array) => {
@@ -49,7 +48,7 @@ const App = () => {
     setPickedColors(prev => [...prev, color]);
   };
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const { getRootProps, getInputProps } = useDropzone({
     accept: {
       'image/*': [],
       'video/*': []
@@ -96,7 +95,7 @@ const App = () => {
     multiple: false
   });
 
-  const extractColors = async (count) => {
+  const extractColors = useCallback(async (count) => {
     if (!image) return;
     setIsLoading(true);
 
@@ -118,22 +117,17 @@ const App = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [image]);
 
-  // Create a debounced version of extractColors
-  const debouncedExtractColors = useCallback(
-    debounce((count) => {
-      extractColors(count);
-    }, 300),
-    [image]
-  );
+  const debouncedExtractColors = useCallback(() => {
+    extractColors(numColors);
+  }, [numColors, extractColors]);
 
-  // Update the useEffect
   useEffect(() => {
     if (colors.length > 0 && image) {
       debouncedExtractColors(numColors);
     }
-  }, [numColors, debouncedExtractColors]);
+  }, [numColors, debouncedExtractColors, colors.length, image]);
 
   const handleUpload = async () => {
     if (!image) return alert("Please select a file!");
@@ -526,10 +520,10 @@ const App = () => {
                     type="range"
                     min="1"
                     max="20"
+                    step="1"
                     value={numColors}
                     onChange={(e) => setNumColors(parseInt(e.target.value))}
                     className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-500"
-                    disabled={isLoading}
                   />
                   <span className="text-gray-700 font-medium w-16 md:w-20 text-center text-sm md:text-base">
                     {numColors} Colors
