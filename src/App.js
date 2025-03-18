@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import axios from "axios";
 import { useDropzone } from "react-dropzone";
+import { debounce } from 'lodash';
 import logo from './assets/logo.svg';
 
 const shuffleArray = (array) => {
@@ -48,7 +49,7 @@ const App = () => {
     setPickedColors(prev => [...prev, color]);
   };
 
-  const { getRootProps, getInputProps } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: {
       'image/*': [],
       'video/*': []
@@ -120,16 +121,19 @@ const App = () => {
   };
 
   // Create a debounced version of extractColors
-  const debouncedExtractColors = useCallback(() => {
-    extractColors(numColors);
-  }, [numColors, extractColors]);
+  const debouncedExtractColors = useCallback(
+    debounce((count) => {
+      extractColors(count);
+    }, 300),
+    [image]
+  );
 
   // Update the useEffect
   useEffect(() => {
     if (colors.length > 0 && image) {
-      debouncedExtractColors();
+      debouncedExtractColors(numColors);
     }
-  }, [numColors, debouncedExtractColors, colors.length, image]);
+  }, [numColors, debouncedExtractColors]);
 
   const handleUpload = async () => {
     if (!image) return alert("Please select a file!");
