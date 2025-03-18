@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import axios from "axios";
 import { useDropzone } from "react-dropzone";
-import { debounce } from 'lodash';
 import logo from './assets/logo.svg';
 
 const shuffleArray = (array) => {
@@ -49,7 +48,7 @@ const App = () => {
     setPickedColors(prev => [...prev, color]);
   };
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const { getRootProps, getInputProps } = useDropzone({
     accept: {
       'image/*': [],
       'video/*': []
@@ -123,7 +122,7 @@ const App = () => {
   // Create a debounced version of extractColors
   const debouncedExtractColors = useCallback(() => {
     extractColors(numColors);
-  }, [numColors]);
+  }, [numColors, extractColors]);
 
   // Update the useEffect
   useEffect(() => {
