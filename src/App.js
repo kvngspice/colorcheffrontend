@@ -106,7 +106,14 @@ const App = () => {
     formData.append("numColors", count);
 
     try {
-      const response = await axios.post(`${apiUrl}/api/upload`, formData);
+      const response = await axios.post(`${apiUrl}/api/upload/`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        validateStatus: function (status) {
+          return status < 500;
+        }
+      });
       setColors(response.data.colors);
       if (!response.data.isVideo) {
         setColorRegions(response.data.regions);
@@ -115,7 +122,18 @@ const App = () => {
       }
     } catch (error) {
       console.error("Error uploading file:", error);
-      alert("Failed to extract colors.");
+      if (error.response) {
+        console.error("Error response data:", error.response.data);
+        console.error("Error response status:", error.response.status);
+        console.error("Error response headers:", error.response.headers);
+        alert(`Failed to extract colors: ${error.response.data.message || 'Unknown error'}`);
+      } else if (error.request) {
+        console.error("Error request:", error.request);
+        alert("No response received from server");
+      } else {
+        console.error("Error message:", error.message);
+        alert(`Error: ${error.message}`);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -145,7 +163,14 @@ const App = () => {
     }
 
     try {
-      const response = await axios.post(`${apiUrl}/api/upload`, formData);
+      const response = await axios.post(`${apiUrl}/api/upload/`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        validateStatus: function (status) {
+          return status < 500;
+        }
+      });
       setColors(response.data.colors);
       if (!response.data.isVideo) {
         setColorRegions(response.data.regions);
@@ -156,7 +181,14 @@ const App = () => {
       }
     } catch (error) {
       console.error("Error uploading file:", error);
-      alert("Failed to extract colors.");
+      if (error.response) {
+        console.error("Error response data:", error.response.data);
+        alert(`Failed to extract colors: ${error.response.data.message || 'Unknown error'}`);
+      } else if (error.request) {
+        alert("No response received from server");
+      } else {
+        alert(`Error: ${error.message}`);
+      }
     } finally {
       setIsLoading(false);
     }
