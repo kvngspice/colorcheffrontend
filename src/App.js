@@ -29,6 +29,8 @@ const App = () => {
   const imageRef = useRef(null);
   const videoRef = useRef(null);
 
+  const apiUrl = process.env.REACT_APP_API_URL;
+
   const handleImageClick = (e) => {
     if (!imageRef.current) return;
 
@@ -104,7 +106,7 @@ const App = () => {
     formData.append("numColors", count);
 
     try {
-      const response = await axios.post("http://127.0.0.1:8000/api/upload/", formData);
+      const response = await axios.post(`${apiUrl}/api/upload/`, formData);
       setColors(response.data.colors);
       if (!response.data.isVideo) {
         setColorRegions(response.data.regions);
@@ -117,7 +119,7 @@ const App = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [image]);
+  }, [image, apiUrl]);
 
   const debouncedExtractColors = useCallback(() => {
     extractColors(numColors);
