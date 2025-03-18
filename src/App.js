@@ -121,19 +121,16 @@ const App = () => {
   };
 
   // Create a debounced version of extractColors
-  const debouncedExtractColors = useCallback(
-    debounce((count) => {
-      extractColors(count);
-    }, 300),
-    [image]
-  );
+  const debouncedExtractColors = useCallback(() => {
+    extractColors(numColors);
+  }, [numColors]);
 
   // Update the useEffect
   useEffect(() => {
     if (colors.length > 0 && image) {
-      debouncedExtractColors(numColors);
+      debouncedExtractColors();
     }
-  }, [numColors, debouncedExtractColors]);
+  }, [numColors, debouncedExtractColors, colors.length, image]);
 
   const handleUpload = async () => {
     if (!image) return alert("Please select a file!");
