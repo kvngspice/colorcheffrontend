@@ -36,3 +36,24 @@
     transform: rotate(360deg);
   }
 }
+
+@keyframes unblur {
+  from {
+    filter: blur(20px);
+    opacity: 0.5;
+  }
+  to {
+    filter: blur(0);
+    opacity: 1;
+  }
+}
+
+.image-reveal {
+  animation: unblur 1s ease-out;
+}
+
+.image-loading {
+  filter: blur(20px);
+  opacity: 0.5;
+  transition: filter 0.5s ease-out, opacity 0.5s ease-out;
+}

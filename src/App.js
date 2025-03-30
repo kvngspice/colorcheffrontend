@@ -26,10 +26,18 @@ const App = () => {
   const [videoDuration, setVideoDuration] = useState(0);
   const [videoStartTime, setVideoStartTime] = useState(0);
   const [videoEndTime, setVideoEndTime] = useState(5);
+  const [isPosterized, setIsPosterized] = useState(false);
+  const [pixelSize, setPixelSize] = useState(2);
+  const [downloadFormat, setDownloadFormat] = useState('png');
+  const [isLineArt, setIsLineArt] = useState(false);
+  const [threshold, setThreshold] = useState(127);
+  const [blurRadius, setBlurRadius] = useState(0);
+  const [isBlendMode, setIsBlendMode] = useState(false);
+  const [imageLoading, setImageLoading] = useState(false);
   const imageRef = useRef(null);
   const videoRef = useRef(null);
 
-  const apiUrl = (process.env.REACT_APP_API_URL || 'https://colorchef.onrender.com').replace(/\/$/, '');
+  const apiUrl = (process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
 
   const handleImageClick = (e) => {
     if (!imageRef.current) return;
@@ -59,9 +67,9 @@ const App = () => {
       const file = acceptedFiles[0];
       const isVideoFile = file.type.startsWith('video/');
       setIsVideo(isVideoFile);
+      setImageLoading(true);
       
       if (isVideoFile) {
-        // Create video element to get duration
         const video = document.createElement('video');
         video.preload = 'metadata';
         video.onloadedmetadata = () => {
@@ -79,7 +87,7 @@ const App = () => {
       setReserveRegions([]);
       setPickedColors([]);
     },
-    maxSize: 50 * 1024 * 1024 // 50MB limit
+    maxSize: 50 * 1024 * 1024
   });
 
   const { getRootProps: getMainDropProps, getInputProps: getMainDropInputProps, isDragActive: isMainDropActive } = useDropzone({
@@ -138,16 +146,6 @@ const App = () => {
       setIsLoading(false);
     }
   }, [image, apiUrl]);
-
-  const debouncedExtractColors = useCallback(() => {
-    extractColors(numColors);
-  }, [numColors, extractColors]);
-
-  useEffect(() => {
-    if (colors.length > 0 && image) {
-      debouncedExtractColors(numColors);
-    }
-  }, [numColors, debouncedExtractColors, colors.length, image]);
 
   const handleUpload = async () => {
     if (!image) return alert("Please select a file!");
@@ -285,6 +283,207 @@ const App = () => {
     setReserveRegions(reservePairs.map(p => p.region));
   };
 
+  const handlePosterize = async () => {
+    if (!image) return alert("Please select an image first!");
+    setIsLoading(true);
+    setImageLoading(true);
+
+    const formData = new FormData();
+    formData.append("file", image);
+    formData.append("pixelSize", pixelSize);
+    formData.append("numColors", numColors);
+
+    try {
+      const response = await axios.post(`${apiUrl}/api/posterize/`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        responseType: 'blob'
+      });
+
+      const imageUrl = URL.createObjectURL(response.data);
+      setPreview(imageUrl);
+      setIsPosterized(true);
+    } catch (error) {
+      console.error("Error posterizing image:", error);
+      alert("Failed to posterize image");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDownloadPosterized = async (format) => {
+    if (!preview || !isPosterized) return;
+
+    try {
+      if (format === 'png') {
+        const link = document.createElement('a');
+        link.href = preview;
+        link.download = `posterized-image.png`;
+        link.click();
+      } else if (format === 'svg') {
+        setIsLoading(true);
+        const formData = new FormData();
+        formData.append("file", image);
+        formData.append("pixelSize", pixelSize);
+        formData.append("numColors", numColors);
+
+        console.log('Making SVG request to:', `${apiUrl}/api/posterize-svg/`);
+        console.log('With parameters:', { pixelSize, numColors });
+
+        const response = await axios.post(`${apiUrl}/api/posterize-svg/`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            'Accept': '*/*'
+          },
+          responseType: 'text'
+        });
+
+        // Create blob URL and trigger download
+        const blob = new Blob([response.data], { type: 'image/svg+xml' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `posterized-image.svg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      console.error("Error downloading image:", error);
+      if (error.response) {
+        console.error("Error status:", error.response.status);
+        console.error("Error data:", error.response.data);
+      }
+      alert(`Failed to download ${format.toUpperCase()}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDownloadLineArt = async (format) => {
+    if (!preview || !isLineArt) return;
+
+    if (format === 'png') {
+      // For PNG, we can directly use the existing preview
+      const link = document.createElement('a');
+      link.href = preview;
+      link.download = `line-art.png`;
+      link.click();
+    } else if (format === 'svg') {
+      try {
+        setIsLoading(true);
+        const formData = new FormData();
+        formData.append("file", image);
+        formData.append("threshold", threshold);
+        formData.append("blurRadius", blurRadius);
+
+        const response = await axios.post(`${apiUrl}/api/line-art-svg/`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          responseType: 'blob'
+        });
+
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `line-art.svg`;
+        link.click();
+        window.URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error("Error downloading SVG:", error);
+        alert("Failed to download SVG");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  };
+
+  const handleLineArt = async () => {
+    if (!image) return alert("Please select an image first!");
+    setIsLoading(true);
+    setImageLoading(true);
+
+    const formData = new FormData();
+    formData.append("file", image);
+    formData.append("threshold", threshold);
+    formData.append("blurRadius", blurRadius);
+
+    try {
+      console.log('Making request to:', `${apiUrl}/api/line-art/`);
+      console.log('With data:', { threshold, blurRadius });
+
+      const response = await axios.post(`${apiUrl}/api/line-art/`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        responseType: 'blob'
+      });
+
+      const imageUrl = URL.createObjectURL(response.data);
+      setPreview(imageUrl);
+      setIsLineArt(true);
+
+    } catch (error) {
+      console.error("Error creating line art:", error);
+      if (error.response) {
+        console.error("Error status:", error.response.status);
+        console.error("Error data:", error.response.data);
+      }
+      alert("Failed to create line art");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBlendArt = async () => {
+    if (!image || !isPosterized) return alert("Please posterize the image first!");
+    setIsLoading(true);
+    setImageLoading(true);
+
+    const formData = new FormData();
+    formData.append("file", image);
+    formData.append("pixelSize", pixelSize);
+    formData.append("numColors", numColors);
+    formData.append("threshold", threshold);
+    formData.append("blurRadius", blurRadius);
+
+    // Add these debug lines
+    console.log('Making blend request to:', `${apiUrl}/api/blend-art/`);
+    console.log('With parameters:', {
+      pixelSize,
+      numColors,
+      threshold,
+      blurRadius
+    });
+
+    try {
+      const response = await axios.post(`${apiUrl}/api/blend-art/`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        responseType: 'blob'
+      });
+
+      const imageUrl = URL.createObjectURL(response.data);
+      setPreview(imageUrl);
+      setIsBlendMode(true);
+
+    } catch (error) {
+      console.error("Error blending art:", error);
+      if (error.response) {
+        // Add these debug lines
+        console.error("Error status:", error.response.status);
+        console.error("Error data:", error.response.data);
+      }
+      alert("Failed to blend art styles");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Add video trimming controls
   const VideoControls = () => (
     <div className="mt-4 space-y-2">
@@ -384,21 +583,220 @@ const App = () => {
     );
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 animate-gradient p-4">
-      <br />
-      <img 
-        src={logo} 
-        alt="Color Chef Logo" 
-        className="mx-auto mb-4 w-full max-w-xs md:max-w-md lg:max-w-lg" 
-      />
+  // Add this inside the right side controls section of your return statement
+  const PosterizeControls = () => (
+    <div className="space-y-3 sm:space-y-4">
+      <h3 className="text-sm sm:text-base md:text-lg font-semibold mb-2">
+        Paint Settings
+      </h3>
+      <div className="flex items-center gap-2">
+        <input
+          type="range"
+          min="2"
+          max="32"
+          step="2"
+          value={pixelSize}
+          onChange={(e) => setPixelSize(parseInt(e.target.value))}
+          className="flex-1 h-1.5 sm:h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-500"
+        />
+        <span className="text-gray-700 font-medium w-16 sm:w-20 text-center text-xs sm:text-sm">
+          {pixelSize}px
+        </span>
+      </div>
+      <label className="text-[10px] sm:text-xs text-gray-500 italic block">
+        [Larger pixels means images will be more pixelated, lower values will have more detail]
+      </label>
+  
+      <button
+        onClick={handlePosterize}
+        disabled={isLoading || !image || isVideo}
+        className={`
+          w-full px-4 py-2 rounded-lg font-semibold text-white shadow-lg
+          text-sm transition-all duration-300 transform hover:scale-105
+          ${isLoading || !image || isVideo
+            ? "bg-gray-400 cursor-not-allowed"
+            : "bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+          }
+        `}
+      >
+        {isLoading ? "Processing..." : "Paint Image"}
+      </button>
+      <label className="text-[10px] sm:text-xs text-gray-500 italic block">
+        [adjust the color slider above for more color details]
+      </label>
+  
+      {isPosterized && (
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleDownloadPosterized('png')}
+              className="flex-1 px-4 py-2 rounded-lg font-semibold text-white shadow-lg
+                       text-sm transition-all duration-300 transform hover:scale-105
+                       bg-blue-500 hover:bg-blue-600"
+            >
+              Download PNG
+            </button>
+            <button
+              onClick={() => handleDownloadPosterized('svg')}
+              className="flex-1 px-4 py-2 rounded-lg font-semibold text-white shadow-lg
+                       text-sm transition-all duration-300 transform hover:scale-105
+                       bg-green-500 hover:bg-green-600"
+            >
+              Download SVG
+            </button>
+          </div>
+          <button
+            onClick={() => {
+              setPreview(URL.createObjectURL(image));
+              setIsPosterized(false);
+            }}
+            className="w-full px-4 py-2 rounded-lg font-semibold text-gray-700 shadow-lg
+                     text-sm transition-all duration-300 transform hover:scale-105
+                     border border-gray-300 bg-white hover:bg-gray-50"
+          >
+            Reset Image
+          </button>
+        </div>
+      )}
+    </div>
+  );
 
-      <p className="text-2xl md:text-2xl font-light text-center text-white mb-4 md:mb-8">
-        Extract beautiful colors from images and videos
-      </p>
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row gap-4 md:gap-6">
+  // Add LineArtControls component
+  const LineArtControls = () => (
+    <div className="space-y-3 sm:space-y-4">
+      <h3 className="text-sm sm:text-base md:text-lg font-semibold mb-2">
+        Line Art Settings
+      </h3>
+      <div className="space-y-2">
+        <div>
+          <label className="text-sm text-gray-600">Threshold</label>
+          <div className="flex items-center gap-2">
+            <input
+              type="range"
+              min="1"
+              max="255"
+              value={threshold}
+              onChange={(e) => setThreshold(parseInt(e.target.value))}
+              className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-500"
+            />
+            <span className="text-gray-700 font-medium w-12 text-center">
+              {threshold}
+            </span>
+          </div>
+        </div>
+        <div>
+          <label className="text-sm text-gray-600">Blur Radius</label>
+          <div className="flex items-center gap-2">
+            <input
+              type="range"
+              min="0"
+              max="5"
+              value={blurRadius}
+              onChange={(e) => setBlurRadius(parseInt(e.target.value))}
+              className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-500"
+            />
+            <span className="text-gray-700 font-medium w-12 text-center">
+              {blurRadius}
+            </span>
+          </div>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={handleLineArt}
+          disabled={isLoading || !image || isVideo}
+          className={`
+            flex-1 px-4 py-2 rounded-lg font-semibold text-white shadow-lg
+            text-sm transition-all duration-300 transform hover:scale-105
+            ${isLoading || !image || isVideo
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-gradient-to-r from-indigo-500 to-blue-500 hover:from-indigo-600 hover:to-blue-600"
+            }
+          `}
+        >
+          {isLoading ? "Processing..." : "Convert to Line Art ✏️"}
+        </button>
+
+        {isPosterized && (
+          <button
+            onClick={handleBlendArt}
+            disabled={isLoading}
+            className={`
+              flex-1 px-4 py-2 rounded-lg font-semibold text-white shadow-lg
+              text-sm transition-all duration-300 transform hover:scale-105
+              ${isLoading
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+              }
+            `}
+          >
+            {isLoading ? "Blending..." : "Blend with Painted Image 🎨"}
+          </button>
+        )}
+      </div>
+      {isLineArt && (
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleDownloadLineArt('png')}
+              className="flex-1 px-4 py-2 rounded-lg font-semibold text-white shadow-lg
+                       text-sm transition-all duration-300 transform hover:scale-105
+                       bg-blue-500 hover:bg-blue-600"
+            >
+              Download PNG
+            </button>
+            <button
+              onClick={() => handleDownloadLineArt('svg')}
+              className="flex-1 px-4 py-2 rounded-lg font-semibold text-white shadow-lg
+                       text-sm transition-all duration-300 transform hover:scale-105
+                       bg-green-500 hover:bg-green-600"
+            >
+              Download SVG
+            </button>
+          </div>
+          {(isLineArt || isBlendMode) && (
+            <button
+              onClick={() => {
+                setPreview(URL.createObjectURL(image));
+                setIsLineArt(false);
+                setIsBlendMode(false);
+              }}
+              className="w-full px-4 py-2 rounded-lg font-semibold text-gray-700 shadow-lg
+                       text-sm transition-all duration-300 transform hover:scale-105
+                       border border-gray-300 bg-white hover:bg-gray-50"
+            >
+              Reset Image
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 animate-gradient p-2 sm:p-4">
+      {/* Logo and Header Section - Adjust spacing and text size */}
+      <div className="container mx-auto max-w-6xl px-2 sm:px-4 pt-4 sm:pt-6 pb-4 sm:pb-8">
+        <img 
+          src={logo} 
+          alt="Color Chef Logo" 
+          className="mx-auto mb-3 sm:mb-4 w-[180px] sm:w-[220px] md:w-[300px] lg:w-[400px] transition-all duration-300" 
+        />
+
+        <div className="text-center space-y-1 sm:space-y-2 md:space-y-4 max-w-2xl mx-auto px-2">
+          <h1 className="text-lg sm:text-xl md:text-3xl font-light text-white leading-tight">
+            <span className="block mb-1 sm:mb-2">-Extract beautiful colors from images and videos</span>
+            <span className="block text-sm sm:text-lg md:text-2xl">
+              -Turn your images into stunning paintings and line art in seconds.
+            </span>
+          </h1>
+        </div>
+      </div>
+
+      {/* Main content area - Adjust spacing and layout */}
+      <div className="max-w-7xl mx-auto flex flex-col md:flex-row gap-3 sm:gap-4 md:gap-6 px-2 sm:px-4">
         {/* Left Side - Image Section */}
-        <div className="w-full md:w-1/2 bg-white/90 backdrop-blur-sm rounded-2xl p-4 md:p-6 shadow-2xl">
+        <div className="w-full md:w-1/2 bg-white/90 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 shadow-xl sm:shadow-2xl">
           {!preview ? (
             <div
               {...getMainDropProps()}
@@ -467,13 +865,25 @@ const App = () => {
                     )}
                   </div>
                 ) : (
-                  <img
-                    ref={imageRef}
-                    src={preview}
-                    alt="Preview"
-                    onClick={handleImageClick}
-                    className="max-w-full rounded-lg shadow-lg cursor-crosshair"
-                  />
+                  <>
+                    <img
+                      ref={imageRef}
+                      src={preview}
+                      alt="Preview"
+                      onClick={handleImageClick}
+                      className={`max-w-full rounded-lg shadow-lg cursor-crosshair 
+                                ${imageLoading ? 'image-loading' : 'image-reveal'}`}
+                      onLoad={() => setImageLoading(false)}
+                    />
+                    {imageLoading && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="flex flex-col items-center gap-2">
+                          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-500"></div>
+                          <span className="text-sm text-gray-600">Processing image...</span>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
                 {/* Color Region Indicators */}
                 {colorRegions && colors && colorRegions.map((region, index) => {
@@ -517,39 +927,20 @@ const App = () => {
         </div>
 
         {/* Right Side - Controls and Colors */}
-        <div className="w-full md:w-1/2 bg-white/90 backdrop-blur-sm rounded-2xl p-4 md:p-6 shadow-2xl">
-          <div className="space-y-4 md:space-y-6">
-            {/* Picked Colors Section */}
-            {pickedColors.length > 0 && (
-              <div>
-                <h3 className="text-base md:text-lg font-semibold mb-2 md:mb-3">Picked Colors</h3>
-                <div className="flex gap-2 flex-wrap">
-                  {pickedColors.map((color, index) => (
-                    <div
-                      key={`palette-${index}`}
-                      className="group relative"
-                    >
-                      <div 
-                        className="w-12 h-12 rounded-lg shadow-md transform transition-all duration-300 
-                                 hover:scale-110 hover:shadow-lg"
-                        style={{ backgroundColor: `rgb(${color.join(",")})` }}
-                      />
-                      <div className="opacity-0 group-hover:opacity-100 absolute -bottom-6 left-1/2 transform -translate-x-1/2 
-                                    bg-black/75 text-white px-2 py-1 rounded-md text-xs whitespace-nowrap">
-                        RGB: {color.join(", ")}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
+        <div className="w-full md:w-1/2 bg-white/90 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 shadow-xl sm:shadow-2xl">
+          <div className="space-y-3 sm:space-y-4 md:space-y-6">
             {/* Auto Extract Controls */}
             <div>
-              <h3 className="text-base md:text-lg font-semibold mb-2 md:mb-3">Auto Extract Colors</h3>
-              <div className="flex flex-col gap-3 md:gap-4">
+              <h3 className="text-sm sm:text-base md:text-lg font-semibold mb-2 md:mb-3">
+                Auto Extract Colors
+              </h3>
+              <label className="text-[10px] sm:text-xs text-gray-500 italic block">
+        [select the number of colors you want to extract]
+      </label>
+  
+              <div className="flex flex-col gap-2 sm:gap-3 md:gap-4">
                 {/* Color Count Slider */}
-                <div className="flex items-center gap-2 md:gap-4">
+                <div className="flex items-center gap-2">
                   <input
                     type="range"
                     min="1"
@@ -557,14 +948,14 @@ const App = () => {
                     step="1"
                     value={numColors}
                     onChange={(e) => setNumColors(parseInt(e.target.value))}
-                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                    className="flex-1 h-1.5 sm:h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-500"
                   />
-                  <span className="text-gray-700 font-medium w-16 md:w-20 text-center text-sm md:text-base">
+                  <span className="text-gray-700 font-medium w-14 sm:w-16 md:w-20 text-center text-xs sm:text-sm md:text-base">
                     {numColors} Colors
                   </span>
                 </div>
 
-                {/* Buttons Container */}
+                {/* Upload and Extract Buttons */}
                 <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                   {/* Upload Button */}
                   <div {...getRootProps()} className="flex-1">
@@ -616,7 +1007,7 @@ const App = () => {
               </div>
             </div>
 
-            {/* Extracted Colors Palette */}
+            {/* Extracted Colors Palette - Moved here */}
             {colors.length > 0 && (
               <div>
                 <div className="flex justify-between items-center mb-2 md:mb-3">
@@ -626,18 +1017,9 @@ const App = () => {
                     className="flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1 md:py-1.5 text-xs md:text-sm 
                            bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
                   >
-                    <svg 
-                      className="w-4 h-4" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      viewBox="0 0 24 24"
-                    >
-                      <path 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round" 
-                        strokeWidth={2} 
-                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" 
-                      />
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
                     Shuffle
                   </button>
@@ -718,12 +1100,22 @@ const App = () => {
                 </div>
               </div>
             )}
+
+            {/* Posterize Controls */}
+            {!isVideo && (
+              <>
+                <PosterizeControls />
+                <div className="mt-4">
+                  <LineArtControls />
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className="mt-8 text-center text-white">
+      {/* Footer - Adjust spacing */}
+      <footer className="mt-4 sm:mt-8 text-center text-white text-sm sm:text-base pb-4">
         <p>
           Built by <a href="https://www.instagram.com/kvngspice_/" className="underline">Samson Adebayo</a>
         </p>
