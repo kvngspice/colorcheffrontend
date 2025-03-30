@@ -57,12 +57,49 @@ const App = () => {
     setPickedColors(prev => [...prev, color]);
   };
 
+  const compressImage = async (file, maxWidth = 1200) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          // Calculate new dimensions
+          let width = img.width;
+          let height = img.height;
+          
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+
+          // Create canvas and compress
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Convert to blob
+          canvas.toBlob((blob) => {
+            resolve(new File([blob], file.name, {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            }));
+          }, 'image/jpeg', 0.8); // 0.8 quality
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   const { getRootProps, getInputProps } = useDropzone({
     accept: {
       'image/*': [],
       'video/*': []
     },
-    onDrop: (acceptedFiles) => {
+    onDrop: async (acceptedFiles) => {
       const file = acceptedFiles[0];
       const isVideoFile = file.type.startsWith('video/');
       setIsVideo(isVideoFile);
@@ -76,10 +113,13 @@ const App = () => {
           setVideoEndTime(Math.min(5, video.duration));
         };
         video.src = URL.createObjectURL(file);
+      } else {
+        // Compress image before setting
+        const compressedImage = await compressImage(file);
+        setImage(compressedImage);
+        setPreview(URL.createObjectURL(compressedImage));
       }
       
-      setImage(file);
-      setPreview(URL.createObjectURL(file));
       setColors([]);
       setColorRegions([]);
       setReserveColors([]);
