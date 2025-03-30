@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef } from "react";
 import axios from "axios";
 import { useDropzone } from "react-dropzone";
 import logo from './assets/logo.svg';
@@ -28,7 +28,6 @@ const App = () => {
   const [videoEndTime, setVideoEndTime] = useState(5);
   const [isPosterized, setIsPosterized] = useState(false);
   const [pixelSize, setPixelSize] = useState(2);
-  const [downloadFormat, setDownloadFormat] = useState('png');
   const [isLineArt, setIsLineArt] = useState(false);
   const [threshold, setThreshold] = useState(127);
   const [blurRadius, setBlurRadius] = useState(0);
@@ -104,48 +103,6 @@ const App = () => {
     },
     multiple: false
   });
-
-  const extractColors = useCallback(async (count) => {
-    if (!image) return;
-    setIsLoading(true);
-
-    const formData = new FormData();
-    formData.append("file", image);
-    formData.append("numColors", count);
-
-    try {
-      const response = await axios.post(`${apiUrl}/api/upload/`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        validateStatus: function (status) {
-          return status < 500;
-        }
-      });
-      setColors(response.data.colors);
-      if (!response.data.isVideo) {
-        setColorRegions(response.data.regions);
-        setReserveColors(response.data.reserveColors);
-        setReserveRegions(response.data.reserveRegions);
-      }
-    } catch (error) {
-      console.error("Error uploading file:", error);
-      if (error.response) {
-        console.error("Error response data:", error.response.data);
-        console.error("Error response status:", error.response.status);
-        console.error("Error response headers:", error.response.headers);
-        alert(`Failed to extract colors: ${error.response.data.message || 'Unknown error'}`);
-      } else if (error.request) {
-        console.error("Error request:", error.request);
-        alert("No response received from server");
-      } else {
-        console.error("Error message:", error.message);
-        alert(`Error: ${error.message}`);
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  }, [image, apiUrl]);
 
   const handleUpload = async () => {
     if (!image) return alert("Please select a file!");
