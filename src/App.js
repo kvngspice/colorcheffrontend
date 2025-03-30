@@ -1,7 +1,8 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import axios from "axios";
 import { useDropzone } from "react-dropzone";
 import logo from './assets/logo.svg';
+import { debounce } from 'lodash';
 
 const shuffleArray = (array) => {
   const newArray = [...array];
@@ -10,6 +11,22 @@ const shuffleArray = (array) => {
     [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
   }
   return newArray;
+};
+
+const useDebounce = (value, delay) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
 };
 
 const App = () => {
@@ -57,49 +74,12 @@ const App = () => {
     setPickedColors(prev => [...prev, color]);
   };
 
-  const compressImage = async (file, maxWidth = 1200) => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-          // Calculate new dimensions
-          let width = img.width;
-          let height = img.height;
-          
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          }
-
-          // Create canvas and compress
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-          
-          // Convert to blob
-          canvas.toBlob((blob) => {
-            resolve(new File([blob], file.name, {
-              type: 'image/jpeg',
-              lastModified: Date.now(),
-            }));
-          }, 'image/jpeg', 0.8); // 0.8 quality
-        };
-        img.src = event.target.result;
-      };
-      reader.readAsDataURL(file);
-    });
-  };
-
   const { getRootProps, getInputProps } = useDropzone({
     accept: {
       'image/*': [],
       'video/*': []
     },
-    onDrop: async (acceptedFiles) => {
+    onDrop: (acceptedFiles) => {
       const file = acceptedFiles[0];
       const isVideoFile = file.type.startsWith('video/');
       setIsVideo(isVideoFile);
@@ -113,13 +93,10 @@ const App = () => {
           setVideoEndTime(Math.min(5, video.duration));
         };
         video.src = URL.createObjectURL(file);
-      } else {
-        // Compress image before setting
-        const compressedImage = await compressImage(file);
-        setImage(compressedImage);
-        setPreview(URL.createObjectURL(compressedImage));
       }
       
+      setImage(file);
+      setPreview(URL.createObjectURL(file));
       setColors([]);
       setColorRegions([]);
       setReserveColors([]);
@@ -617,182 +594,92 @@ const App = () => {
   };
 
   // Add this inside the right side controls section of your return statement
-  const PosterizeControls = () => (
-    <div className="space-y-3 sm:space-y-4">
-      <h3 className="text-sm sm:text-base md:text-lg font-semibold mb-2">
-        Paint Settings
-      </h3>
-      <div className="flex items-center gap-2">
-        <input
-          type="range"
-          min="2"
-          max="32"
-          step="2"
-          value={pixelSize}
-          onChange={(e) => setPixelSize(parseInt(e.target.value))}
-          className="flex-1 h-1.5 sm:h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-500"
-        />
-        <span className="text-gray-700 font-medium w-16 sm:w-20 text-center text-xs sm:text-sm">
-          {pixelSize}px
-        </span>
-      </div>
-      <label className="text-[10px] sm:text-xs text-gray-500 italic block">
-        [Larger pixels means images will be more pixelated, lower values will have more detail]
-      </label>
-  
-      <button
-        onClick={handlePosterize}
-        disabled={isLoading || !image || isVideo}
-        className={`
-          w-full px-4 py-2 rounded-lg font-semibold text-white shadow-lg
-          text-sm transition-all duration-300 transform hover:scale-105
-          ${isLoading || !image || isVideo
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
-          }
-        `}
-      >
-        {isLoading ? "Processing..." : "Paint Image"}
-      </button>
-      <label className="text-[10px] sm:text-xs text-gray-500 italic block">
-        [adjust the color slider above for more color details]
-      </label>
-  
-      {isPosterized && (
-        <div className="space-y-2">
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleDownloadPosterized('png')}
-              className="flex-1 px-4 py-2 rounded-lg font-semibold text-white shadow-lg
-                       text-sm transition-all duration-300 transform hover:scale-105
-                       bg-blue-500 hover:bg-blue-600"
-            >
-              Download PNG
-            </button>
-            <button
-              onClick={() => handleDownloadPosterized('svg')}
-              className="flex-1 px-4 py-2 rounded-lg font-semibold text-white shadow-lg
-                       text-sm transition-all duration-300 transform hover:scale-105
-                       bg-green-500 hover:bg-green-600"
-            >
-              Download SVG
-            </button>
-          </div>
-          <button
-            onClick={() => {
-              setPreview(URL.createObjectURL(image));
-              setIsPosterized(false);
-            }}
-            className="w-full px-4 py-2 rounded-lg font-semibold text-gray-700 shadow-lg
-                     text-sm transition-all duration-300 transform hover:scale-105
-                     border border-gray-300 bg-white hover:bg-gray-50"
-          >
-            Reset Image
-          </button>
-        </div>
-      )}
-    </div>
-  );
+  const PosterizeControls = () => {
+    const [localPixelSize, setLocalPixelSize] = useState(pixelSize);
+    const debouncedPixelSize = useDebounce(localPixelSize, 150);
 
-  // Add LineArtControls component
-  const LineArtControls = () => (
-    <div className="space-y-3 sm:space-y-4">
-      <h3 className="text-sm sm:text-base md:text-lg font-semibold mb-2">
-        Line Art Settings
-      </h3>
-      <div className="space-y-2">
-        <div>
-          <label className="text-sm text-gray-600">Threshold</label>
-          <div className="flex items-center gap-2">
-            <input
-              type="range"
-              min="1"
-              max="255"
-              value={threshold}
-              onChange={(e) => setThreshold(parseInt(e.target.value))}
-              className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-500"
-            />
-            <span className="text-gray-700 font-medium w-12 text-center">
-              {threshold}
-            </span>
-          </div>
+    useEffect(() => {
+      setPixelSize(debouncedPixelSize);
+    }, [debouncedPixelSize]);
+
+    return (
+      <div className="space-y-3 sm:space-y-4">
+        <h3 className="text-sm sm:text-base md:text-lg font-semibold mb-2">
+          Painting Settings
+        </h3>
+        
+        {/* Pixel Size Controls */}
+        <div className="flex items-center gap-2">
+          <input
+            type="range"
+            min="2"
+            max="32"
+            step="1"
+            value={localPixelSize}
+            onChange={(e) => setLocalPixelSize(parseInt(e.target.value))}
+            className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer 
+                       accent-purple-500 transition-all duration-150"
+          />
+          <span className="text-gray-700 font-medium w-16 text-center text-sm">
+            {localPixelSize}px
+          </span>
         </div>
-        <div>
-          <label className="text-sm text-gray-600">Blur Radius</label>
-          <div className="flex items-center gap-2">
-            <input
-              type="range"
-              min="0"
-              max="5"
-              value={blurRadius}
-              onChange={(e) => setBlurRadius(parseInt(e.target.value))}
-              className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-500"
-            />
-            <span className="text-gray-700 font-medium w-12 text-center">
-              {blurRadius}
-            </span>
-          </div>
-        </div>
-      </div>
-      <div className="flex gap-2">
+        
+        <label className="text-xs text-gray-500 italic block">
+          [Larger pixels means images will be more pixelated, lower values will have more detail]
+        </label>
+
+        {/* Posterize Button */}
         <button
-          onClick={handleLineArt}
+          onClick={handlePosterize}
           disabled={isLoading || !image || isVideo}
           className={`
-            flex-1 px-4 py-2 rounded-lg font-semibold text-white shadow-lg
+            w-full px-4 py-2 rounded-lg font-semibold text-white shadow-lg
             text-sm transition-all duration-300 transform hover:scale-105
             ${isLoading || !image || isVideo
               ? "bg-gray-400 cursor-not-allowed"
-              : "bg-gradient-to-r from-indigo-500 to-blue-500 hover:from-indigo-600 hover:to-blue-600"
+              : "bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
             }
           `}
         >
-          {isLoading ? "Processing..." : "Convert to Line Art ✏️"}
+          {isLoading ? (
+            <span className="flex items-center justify-center">
+              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Processing...
+            </span>
+          ) : (
+            "Posterize Image"
+          )}
         </button>
 
+        {/* Download Buttons - Added back */}
         {isPosterized && (
-          <button
-            onClick={handleBlendArt}
-            disabled={isLoading}
-            className={`
-              flex-1 px-4 py-2 rounded-lg font-semibold text-white shadow-lg
-              text-sm transition-all duration-300 transform hover:scale-105
-              ${isLoading
-                ? "bg-gray-400 cursor-not-allowed"
-                : "bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
-              }
-            `}
-          >
-            {isLoading ? "Blending..." : "Blend with Painted Image 🎨"}
-          </button>
-        )}
-      </div>
-      {isLineArt && (
-        <div className="space-y-2">
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleDownloadLineArt('png')}
-              className="flex-1 px-4 py-2 rounded-lg font-semibold text-white shadow-lg
-                       text-sm transition-all duration-300 transform hover:scale-105
-                       bg-blue-500 hover:bg-blue-600"
-            >
-              Download PNG
-            </button>
-            <button
-              onClick={() => handleDownloadLineArt('svg')}
-              className="flex-1 px-4 py-2 rounded-lg font-semibold text-white shadow-lg
-                       text-sm transition-all duration-300 transform hover:scale-105
-                       bg-green-500 hover:bg-green-600"
-            >
-              Download SVG
-            </button>
-          </div>
-          {(isLineArt || isBlendMode) && (
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleDownloadPosterized('png')}
+                className="flex-1 px-4 py-2 rounded-lg font-semibold text-white shadow-lg
+                         text-sm transition-all duration-300 transform hover:scale-105
+                         bg-blue-500 hover:bg-blue-600"
+              >
+                Download PNG
+              </button>
+              <button
+                onClick={() => handleDownloadPosterized('svg')}
+                className="flex-1 px-4 py-2 rounded-lg font-semibold text-white shadow-lg
+                         text-sm transition-all duration-300 transform hover:scale-105
+                         bg-green-500 hover:bg-green-600"
+              >
+                Download SVG
+              </button>
+            </div>
             <button
               onClick={() => {
                 setPreview(URL.createObjectURL(image));
-                setIsLineArt(false);
-                setIsBlendMode(false);
+                setIsPosterized(false);
               }}
               className="w-full px-4 py-2 rounded-lg font-semibold text-gray-700 shadow-lg
                        text-sm transition-all duration-300 transform hover:scale-105
@@ -800,11 +687,136 @@ const App = () => {
             >
               Reset Image
             </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Add LineArtControls component
+  const LineArtControls = () => {
+    // Add local state for smooth sliders
+    const [localThreshold, setLocalThreshold] = useState(threshold);
+    const [localBlurRadius, setLocalBlurRadius] = useState(blurRadius);
+    
+    // Debounce the values
+    const debouncedThreshold = useDebounce(localThreshold, 150);
+    const debouncedBlurRadius = useDebounce(localBlurRadius, 150);
+    
+    // Update parent state when debounced values change
+    useEffect(() => {
+      setThreshold(debouncedThreshold);
+    }, [debouncedThreshold]);
+    
+    useEffect(() => {
+      setBlurRadius(debouncedBlurRadius);
+    }, [debouncedBlurRadius]);
+
+    return (
+      <div className="space-y-3 sm:space-y-4">
+        <h3 className="text-sm sm:text-base md:text-lg font-semibold mb-2">
+          Line Art Settings
+        </h3>
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm text-gray-600 mb-1 block">Edge Threshold</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="range"
+                min="1"
+                max="255"
+                value={localThreshold}
+                onChange={(e) => setLocalThreshold(parseInt(e.target.value))}
+                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer 
+                           accent-purple-500 transition-all duration-150"
+              />
+              <span className="text-gray-700 font-medium w-12 text-center text-sm">
+                {localThreshold}
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 italic mt-1">
+              Controls edge detection sensitivity
+            </p>
+          </div>
+
+          <div>
+            <label className="text-sm text-gray-600 mb-1 block">Blur Radius</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="range"
+                min="0"
+                max="5"
+                value={localBlurRadius}
+                onChange={(e) => setLocalBlurRadius(parseInt(e.target.value))}
+                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer 
+                           accent-purple-500 transition-all duration-150"
+              />
+              <span className="text-gray-700 font-medium w-12 text-center text-sm">
+                {localBlurRadius}
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 italic mt-1">
+              Smooths edges and reduces noise
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={handleLineArt}
+            disabled={isLoading || !image || isVideo}
+            className={`
+              flex-1 px-4 py-2 rounded-lg font-semibold text-white shadow-lg
+              text-sm transition-all duration-300 transform hover:scale-105
+              ${isLoading || !image || isVideo
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-gradient-to-r from-indigo-500 to-blue-500 hover:from-indigo-600 hover:to-blue-600"
+              }
+            `}
+          >
+            {isLoading ? (
+              <span className="flex items-center justify-center">
+                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Processing...
+              </span>
+            ) : (
+              "Convert to Line Art ✏️"
+            )}
+          </button>
+
+          {isPosterized && (
+            <button
+              onClick={handleBlendArt}
+              disabled={isLoading}
+              className={`
+                flex-1 px-4 py-2 rounded-lg font-semibold text-white shadow-lg
+                text-sm transition-all duration-300 transform hover:scale-105
+                ${isLoading
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+                }
+              `}
+            >
+              {isLoading ? (
+                <span className="flex items-center justify-center">
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Blending...
+                </span>
+              ) : (
+                "Blend with Painted Image 🎨"
+              )}
+            </button>
           )}
         </div>
-      )}
-    </div>
-  );
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 animate-gradient p-2 sm:p-4">
@@ -911,8 +923,8 @@ const App = () => {
                     {imageLoading && (
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className="flex flex-col items-center gap-2">
-                          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-500"></div>
-                          <span className="text-sm text-gray-600">Processing image...</span>
+                          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white"></div>
+                          <span className="text-sm text-white">Processing image...</span>
                         </div>
                       </div>
                     )}
@@ -977,7 +989,7 @@ const App = () => {
                   <input
                     type="range"
                     min="1"
-                    max="20"
+                    max="13"
                     step="1"
                     value={numColors}
                     onChange={(e) => setNumColors(parseInt(e.target.value))}
