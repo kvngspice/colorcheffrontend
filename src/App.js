@@ -104,6 +104,41 @@ const App = () => {
     multiple: false
   });
 
+  const validateImage = (file) => {
+    const errors = [];
+    
+    // Check file size (10MB limit)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      errors.push("File too large. Maximum size is 10MB");
+    }
+
+    // Check file type
+    if (!file.type.startsWith('image/')) {
+      errors.push("Please upload an image file");
+    }
+
+    return errors;
+  };
+
+  const handleApiError = async (error, operation) => {
+    console.error(`Error ${operation}:`, error);
+    
+    if (error.response) {
+      if (error.response.data instanceof Blob) {
+        try {
+          const text = await error.response.data.text();
+          const data = JSON.parse(text);
+          return `Failed to ${operation}: ${data.error || 'Unknown error'}`;
+        } catch (e) {
+          return `Failed to ${operation}. Please try again.`;
+        }
+      }
+      return `Failed to ${operation}: ${error.response.data?.error || 'Unknown error'}`;
+    }
+    return `Failed to ${operation}. Please check your connection and try again.`;
+  };
+
   const handleUpload = async () => {
     if (!image) return alert("Please select a file!");
     setIsLoading(true);
@@ -135,15 +170,8 @@ const App = () => {
         setReserveColors(response.data.reserveColors);
       }
     } catch (error) {
-      console.error("Error uploading file:", error);
-      if (error.response) {
-        console.error("Error response data:", error.response.data);
-        alert(`Failed to extract colors: ${error.response.data.message || 'Unknown error'}`);
-      } else if (error.request) {
-        alert("No response received from server");
-      } else {
-        alert(`Error: ${error.message}`);
-      }
+      const errorMessage = await handleApiError(error, 'upload file');
+      alert(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -242,6 +270,13 @@ const App = () => {
 
   const handlePosterize = async () => {
     if (!image) return alert("Please select an image first!");
+    
+    const errors = validateImage(image);
+    if (errors.length > 0) {
+      alert(errors.join("\n"));
+      return;
+    }
+    
     setIsLoading(true);
     setImageLoading(true);
 
@@ -262,10 +297,11 @@ const App = () => {
       setPreview(imageUrl);
       setIsPosterized(true);
     } catch (error) {
-      console.error("Error posterizing image:", error);
-      alert("Failed to posterize image");
+      const errorMessage = await handleApiError(error, 'posterize image');
+      alert(errorMessage);
     } finally {
       setIsLoading(false);
+      setImageLoading(false);
     }
   };
 
