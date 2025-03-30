@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from "react";
 import axios from "axios";
 import { useDropzone } from "react-dropzone";
 import logo from './assets/logo.svg';
-import { debounce } from 'lodash';
 
 const shuffleArray = (array) => {
   const newArray = [...array];
@@ -48,7 +47,6 @@ const App = () => {
   const [isLineArt, setIsLineArt] = useState(false);
   const [threshold, setThreshold] = useState(127);
   const [blurRadius, setBlurRadius] = useState(0);
-  const [isBlendMode, setIsBlendMode] = useState(false);
   const [imageLoading, setImageLoading] = useState(false);
   const imageRef = useRef(null);
   const videoRef = useRef(null);
@@ -479,8 +477,6 @@ const App = () => {
 
       const imageUrl = URL.createObjectURL(response.data);
       setPreview(imageUrl);
-      setIsBlendMode(true);
-
     } catch (error) {
       console.error("Error blending art:", error);
       if (error.response) {
@@ -814,6 +810,41 @@ const App = () => {
             </button>
           )}
         </div>
+
+        {/* Add these buttons to LineArtControls component after the main buttons */}
+        {isLineArt && (
+          <div className="space-y-2 mt-4">
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleDownloadLineArt('png')}
+                className="flex-1 px-4 py-2 rounded-lg font-semibold text-white shadow-lg
+                         text-sm transition-all duration-300 transform hover:scale-105
+                         bg-blue-500 hover:bg-blue-600"
+              >
+                Download PNG
+              </button>
+              <button
+                onClick={() => handleDownloadLineArt('svg')}
+                className="flex-1 px-4 py-2 rounded-lg font-semibold text-white shadow-lg
+                         text-sm transition-all duration-300 transform hover:scale-105
+                         bg-green-500 hover:bg-green-600"
+              >
+                Download SVG
+              </button>
+            </div>
+            <button
+              onClick={() => {
+                setPreview(URL.createObjectURL(image));
+                setIsLineArt(false);
+              }}
+              className="w-full px-4 py-2 rounded-lg font-semibold text-gray-700 shadow-lg
+                       text-sm transition-all duration-300 transform hover:scale-105
+                       border border-gray-300 bg-white hover:bg-gray-50"
+            >
+              Reset Image
+            </button>
+          </div>
+        )}
       </div>
     );
   };
