@@ -48,6 +48,7 @@ const App = () => {
   const [threshold, setThreshold] = useState(127);
   const [blurRadius, setBlurRadius] = useState(0);
   const [imageLoading, setImageLoading] = useState(false);
+  const [posterizeStyle, setPosterizeStyle] = useState('classic');
   const imageRef = useRef(null);
   const videoRef = useRef(null);
 
@@ -139,7 +140,7 @@ const App = () => {
   const handleApiError = async (error, operation) => {
     console.error(`Error ${operation}:`, error);
     
-    if (error.response) {
+      if (error.response) {
       if (error.response.data instanceof Blob) {
         try {
           const text = await error.response.data.text();
@@ -299,6 +300,7 @@ const App = () => {
     formData.append("file", image);
     formData.append("pixelSize", pixelSize);
     formData.append("numColors", numColors);
+    formData.append("style", posterizeStyle);
 
     try {
       const response = await axios.post(`${apiUrl}/api/posterize/`, formData, {
@@ -324,49 +326,42 @@ const App = () => {
     if (!preview || !isPosterized) return;
 
     try {
-      if (format === 'png') {
-        const link = document.createElement('a');
-        link.href = preview;
-        link.download = `posterized-image.png`;
-        link.click();
-      } else if (format === 'svg') {
-        setIsLoading(true);
-        const formData = new FormData();
-        formData.append("file", image);
-        formData.append("pixelSize", pixelSize);
-        formData.append("numColors", numColors);
+        if (format === 'png') {
+            const link = document.createElement('a');
+            link.href = preview;
+            link.download = `posterized-image.png`;
+            link.click();
+        } else if (format === 'svg') {
+            setIsLoading(true);
+            const formData = new FormData();
+            formData.append("file", image);
+            formData.append("pixelSize", pixelSize);
+            formData.append("numColors", numColors);
+            formData.append("style", posterizeStyle);
 
-        console.log('Making SVG request to:', `${apiUrl}/api/posterize-svg/`);
-        console.log('With parameters:', { pixelSize, numColors });
+            const response = await axios.post(`${apiUrl}/api/posterize-svg/`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                    'Accept': '*/*'
+                },
+                responseType: 'text'
+            });
 
-        const response = await axios.post(`${apiUrl}/api/posterize-svg/`, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-            'Accept': '*/*'
-          },
-          responseType: 'text'
-        });
-
-        // Create blob URL and trigger download
-        const blob = new Blob([response.data], { type: 'image/svg+xml' });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `posterized-image.svg`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      }
+            const blob = new Blob([response.data], { type: 'image/svg+xml' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `posterized-image.svg`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        }
     } catch (error) {
-      console.error("Error downloading image:", error);
-      if (error.response) {
-        console.error("Error status:", error.response.status);
-        console.error("Error data:", error.response.data);
-      }
-      alert(`Failed to download ${format.toUpperCase()}`);
+        console.error("Error downloading image:", error);
+        alert(`Failed to download ${format.toUpperCase()}`);
     } finally {
-      setIsLoading(false);
+        setIsLoading(false);
     }
   };
 
@@ -598,11 +593,33 @@ const App = () => {
       setPixelSize(debouncedPixelSize);
     }, [debouncedPixelSize]);
 
-    return (
+  return (
       <div className="space-y-3 sm:space-y-4">
         <h3 className="text-sm sm:text-base md:text-lg font-semibold mb-2">
           Painting Settings
         </h3>
+        
+        {/* Style Selection */}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => setPosterizeStyle('classic')}
+            className={`px-3 py-2 rounded-lg text-sm font-medium transition-all
+              ${posterizeStyle === 'classic' 
+                ? 'bg-purple-500 text-white' 
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+          >
+            Classic
+          </button>
+          <button
+            onClick={() => setPosterizeStyle('cartoon')}
+            className={`px-3 py-2 rounded-lg text-sm font-medium transition-all
+              ${posterizeStyle === 'cartoon' 
+                ? 'bg-purple-500 text-white' 
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+          >
+            Cartoon
+          </button>
+        </div>
         
         {/* Pixel Size Controls */}
         <div className="flex items-center gap-2">
@@ -853,9 +870,9 @@ const App = () => {
     <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 animate-gradient p-2 sm:p-4">
       {/* Logo and Header Section - Adjust spacing and text size */}
       <div className="container mx-auto max-w-6xl px-2 sm:px-4 pt-4 sm:pt-6 pb-4 sm:pb-8">
-        <img 
-          src={logo} 
-          alt="Color Chef Logo" 
+      <img 
+        src={logo} 
+        alt="Color Chef Logo" 
           className="mx-auto mb-3 sm:mb-4 w-[180px] sm:w-[220px] md:w-[300px] lg:w-[400px] transition-all duration-300" 
         />
 
@@ -942,11 +959,11 @@ const App = () => {
                   </div>
                 ) : (
                   <>
-                    <img
-                      ref={imageRef}
-                      src={preview}
-                      alt="Preview"
-                      onClick={handleImageClick}
+                  <img
+                    ref={imageRef}
+                    src={preview}
+                    alt="Preview"
+                    onClick={handleImageClick}
                       className={`max-w-full rounded-lg shadow-lg cursor-crosshair 
                                 ${imageLoading ? 'image-loading' : 'image-reveal'}`}
                       onLoad={() => setImageLoading(false)}
@@ -1020,7 +1037,7 @@ const App = () => {
                   <input
                     type="range"
                     min="1"
-                    max="13"
+                    max="15"
                     step="1"
                     value={numColors}
                     onChange={(e) => setNumColors(parseInt(e.target.value))}
